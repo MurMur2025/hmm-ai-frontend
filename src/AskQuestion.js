@@ -18,24 +18,29 @@ const AskQuestion = () => {
       const res = await axios.post("https://hmm-ai-backend.onrender.com/api/ask", { question });
       const aiText = res.data.response;
 
-      // Split response into sections based on double line breaks (formatting from AI)
-      const sections = aiText.split("\n\n");
+      // Extract structured sections from AI response
+      const misleadingStatement = aiText.match(/\*\*Misinformation Identified\*\*:(.*?)(?=\*\*Correct Information\*\*|$)/s)?.[1]?.trim() || "No misleading statement found.";
+      const correction = aiText.match(/\*\*Correct Information\*\*:(.*?)(?=\*\*Conclusion\*\*|$)/s)?.[1]?.trim() || "No correction available.";
+      const keyPoints = aiText.match(/\*\*(.*?)\*\*:(.*?)(?=\*\*|$)/gs)?.map(point => point.trim()) || [];
+      const conclusion = aiText.match(/\*\*Conclusion\*\*:(.*?)(?=\#\#\# Suggested Post|$)/s)?.[1]?.trim() || "No conclusion provided.";
+      const suggestedPost = aiText.match(/### Suggested Post:\n"(.*?)"/s)?.[1]?.trim() || "No suggested post available.";
 
-      // Identify key discussion point (assuming the last section contains the social media post)
-      const discussionPoint = sections.find(section => section.includes("Suggested Post:")) || "No suggested post available.";
- 
       // Structure the response
       setResponse({
-        factBasedAnswer: sections[0] || "No answer available.",
-        talkingPoints: sections.slice(1) || [],
-        keyDiscussionPoint: discussionPoint
+        misleadingStatement,
+        correction,
+        keyPoints,
+        conclusion,
+        suggestedPost
       });
     } catch (error) {
       console.error("Error fetching response:", error);
       setResponse({
-        factBasedAnswer: "An error occurred. Please try again.",
-        talkingPoints: [],
-        keyDiscussionPoint: ""
+        misleadingStatement: "",
+        correction: "An error occurred. Please try again.",
+        keyPoints: [],
+        conclusion: "",
+        suggestedPost: ""
       });
     }
 
@@ -65,28 +70,34 @@ const AskQuestion = () => {
 
       {response && (
         <div style={{ marginTop: "20px", textAlign: "left", maxWidth: "600px", margin: "auto", padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }}>
-          <h3 style={{ color: "#007BFF" }}>Fact-Based Answer:</h3>
-          <p>{response.factBasedAnswer}</p>
+          <h3 style={{ color: "#E74C3C" }}>Misleading Statement:</h3>
+          <p>{response.misleadingStatement}</p>
 
-          {response.talkingPoints.length > 0 && (
+          <h3 style={{ color: "#007BFF" }}>Correction:</h3>
+          <p>{response.correction}</p>
+
+          {response.keyPoints.length > 0 && (
             <>
-              <h4 style={{ color: "#28A745" }}>Key Talking Points:</h4>
+              <h3 style={{ color: "#28A745" }}>Key Points:</h3>
               <ul>
-                {response.talkingPoints.map((point, index) => (
+                {response.keyPoints.map((point, index) => (
                   <li key={index}>{point}</li>
                 ))}
               </ul>
             </>
           )}
 
-          {response.keyDiscussionPoint && (
+          <h3 style={{ color: "#FF8C00" }}>Conclusion:</h3>
+          <p>{response.conclusion}</p>
+
+          {response.suggestedPost && response.suggestedPost !== "No suggested post available." && (
             <div style={{ marginTop: "20px", padding: "10px", background: "#f8f9fa", borderRadius: "8px", border: "1px solid #ccc" }}>
               <h4 style={{ color: "#E74C3C" }}>Suggested Social Media Post:</h4>
               <p style={{ fontStyle: "italic", fontSize: "14px", color: "#333" }}>
-                "{response.keyDiscussionPoint}"
+                "{response.suggestedPost}"
               </p>
               <button
-                onClick={() => navigator.clipboard.writeText(response.keyDiscussionPoint)}
+                onClick={() => navigator.clipboard.writeText(response.suggestedPost)}
                 style={{ padding: "5px 10px", cursor: "pointer", backgroundColor: "#007BFF", color: "white", border: "none", borderRadius: "5px" }}
               >
                 Copy to Clipboard

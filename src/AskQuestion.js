@@ -16,30 +16,67 @@ const AskQuestion = () => {
 
     try {
       const res = await axios.post("https://hmm-ai-backend.onrender.com/api/ask", { question });
-      const aiText = res.data.response;
+      console.log("Full AI Response:", JSON.stringify(res.data.response, null, 2));
 
-      // Extract structured sections from AI response
-      const misleadingStatement = aiText.match(/### Misleading Statement:\n(.*?)(?=\n###|$)/s)?.[1]?.trim() || "No misleading statement found.";
-      const keyPointsMatch = aiText.match(/### Correct Information:\n([\s\S]*?)(?=\n###|$)/s);
-      const keyPoints = keyPointsMatch ? keyPointsMatch[1].split("\n- ").slice(1) : []; // Convert to bullet points
-      const sourcesMatch = aiText.match(/### Sources:\n([\s\S]*?)(?=\n###|$)/s) || aiText.match(/### Verifiable Evidence:\n([\s\S]*?)(?=\n###|$)/s);
-      const sources = sourcesMatch ? sourcesMatch[1].split("\n- ").slice(1) : []; // Convert to bullet points
-      const suggestedPost = aiText.match(/### Suggested Post:\n(.*?)(?=\n|$)/s)?.[1]?.trim() || "No suggested post available.";
+      // Get the raw AI text. The backend now returns a string with the templated format.
+      const rawResponse = res.data.response;
+      const aiText =
+        typeof rawResponse === "object" && rawResponse !== null && rawResponse.text
+          ? rawResponse.text
+          : rawResponse;
+      console.log("AI Text:", aiText);
 
-      // Structure the response
+      // Use regex to extract sections based on the fixed headings.
+      const misleadingStatementMatch = aiText.match(/### Misleading Statement:\s*([\s\S]*?)(?=###)/);
+      const keyPointsMatch = aiText.match(/### Key Points:\s*([\s\S]*?)(?=###)/);
+      const evidenceMatch = aiText.match(/### Verifiable Evidence:\s*([\s\S]*?)(?=###)/);
+      const positiveSpinMatch = aiText.match(/### Positive Spin:\s*([\s\S]*?)(?=###)/);
+      const suggestedPostMatch = aiText.match(/### Suggested Post:\s*"([\s\S]*?)"/);
+
+      const misleadingStatement = misleadingStatementMatch
+        ? misleadingStatementMatch[1].trim()
+        : "N/A";
+
+      // Extract key points by splitting on newlines and filtering bullet points.
+      let keyPoints = [];
+      if (keyPointsMatch) {
+        keyPoints = keyPointsMatch[1]
+          .split("\n")
+          .filter(line => line.trim().startsWith("-"))
+          .map(line => line.replace(/^- /, "").trim());
+      }
+
+      // Extract verifiable evidence (sources) in a similar way.
+      let sources = [];
+      if (evidenceMatch) {
+        sources = evidenceMatch[1]
+          .split("\n")
+          .filter(line => line.trim().startsWith("-"))
+          .map(line => line.replace(/^- /, "").trim());
+      }
+
+      const positiveSpin = positiveSpinMatch
+        ? positiveSpinMatch[1].trim()
+        : "N/A";
+      const suggestedPost = suggestedPostMatch
+        ? suggestedPostMatch[1].trim()
+        : "N/A";
+
       setResponse({
         misleadingStatement,
         keyPoints,
         sources,
-        suggestedPost
+        positiveSpin,
+        suggestedPost,
       });
     } catch (error) {
       console.error("Error fetching response:", error);
       setResponse({
-        misleadingStatement: "",
-        keyPoints: ["An error occurred. Please try again."],
+        misleadingStatement: "An error occurred. Please try again.",
+        keyPoints: [],
         sources: [],
-        suggestedPost: ""
+        positiveSpin: "N/A",
+        suggestedPost: "N/A",
       });
     }
 
@@ -68,12 +105,22 @@ const AskQuestion = () => {
       )}
 
       {response && (
-        <div style={{ marginTop: "20px", textAlign: "left", maxWidth: "600px", margin: "auto", padding: "10px", border: "1px solid #ddd", borderRadius: "8px" }}>
+        <div
+          style={{
+            marginTop: "20px",
+            textAlign: "left",
+            maxWidth: "600px",
+            margin: "auto",
+            padding: "10px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+          }}
+        >
           <h3 style={{ color: "#E74C3C" }}>Misleading Statement:</h3>
           <p>{response.misleadingStatement}</p>
 
           <h3 style={{ color: "#007BFF" }}>Key Points:</h3>
-          {response.keyPoints.length > 0 ? (
+          {response.keyPoints && response.keyPoints.length > 0 ? (
             <ul>
               {response.keyPoints.map((point, index) => (
                 <li key={index}>{point}</li>
@@ -83,26 +130,44 @@ const AskQuestion = () => {
             <p>No key points available.</p>
           )}
 
-          {response.sources.length > 0 && (
-            <>
-              <h3 style={{ color: "#28A745" }}>Sources:</h3>
-              <ul>
-                {response.sources.map((source, index) => (
-                  <li key={index}>{source}</li>
-                ))}
-              </ul>
-            </>
+          <h3 style={{ color: "#28A745" }}>Verifiable Evidence:</h3>
+          {response.sources && response.sources.length > 0 ? (
+            <ul>
+              {response.sources.map((source, index) => (
+                <li key={index}>{source}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>No verifiable evidence available.</p>
           )}
 
-          {response.suggestedPost && response.suggestedPost !== "No suggested post available." && (
-            <div style={{ marginTop: "20px", padding: "10px", background: "#f8f9fa", borderRadius: "8px", border: "1px solid #ccc" }}>
+          <h3 style={{ color: "#FF8C00" }}>Positive Spin:</h3>
+          <p>{response.positiveSpin}</p>
+
+          {response.suggestedPost && response.suggestedPost !== "N/A" && (
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "10px",
+                background: "#f8f9fa",
+                borderRadius: "8px",
+                border: "1px solid #ccc",
+              }}
+            >
               <h4 style={{ color: "#E74C3C" }}>Suggested Social Media Post:</h4>
               <p style={{ fontStyle: "italic", fontSize: "14px", color: "#333" }}>
                 "{response.suggestedPost}"
               </p>
               <button
                 onClick={() => navigator.clipboard.writeText(response.suggestedPost)}
-                style={{ padding: "5px 10px", cursor: "pointer", backgroundColor: "#007BFF", color: "white", border: "none", borderRadius: "5px" }}
+                style={{
+                  padding: "5px 10px",
+                  cursor: "pointer",
+                  backgroundColor: "#007BFF",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                }}
               >
                 Copy to Clipboard
               </button>
